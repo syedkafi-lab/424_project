@@ -1,8 +1,6 @@
-# Python & Virtual Environments
-__pycache__/
-*.py[cod]
-*$py.class
+# Virtual Environments & Submodules
 .venv/
+baseline/
 env/
 venv/
 ENV/
