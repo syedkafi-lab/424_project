@@ -1,0 +1,60 @@
+{
+  "config": {
+    "sequence_length_gps": 30,
+    "sequence_length_image": 5,
+    "image_size": 96,
+    "num_beams": 256,
+    "gps_input_dim": 12,
+    "hidden_dim": 192,
+    "gru_layers": 2,
+    "cnn_backbone": "resnet18",
+    "fusion_layers": 2,
+    "fusion_heads": 4,
+    "dropout": 0.25,
+    "batch_size": 64,
+    "epochs": 2,
+    "min_epochs": 1,
+    "patience": 12,
+    "min_delta": 0.001,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "alpha_loss": 0.5,
+    "grad_clip": 1.0,
+    "warmup_epochs": 3,
+    "save_every": 10,
+    "use_amp": true,
+    "amp_dtype": "bfloat16",
+    "num_workers": 4,
+    "pin_memory": true,
+    "device": "cuda",
+    "seed": 42,
+    "cudnn_benchmark": true,
+    "train_frac": 0.7,
+    "calib_frac": 0.15,
+    "test_frac": 0.15,
+    "target_alpha": 0.1,
+    "tolerance_db": 3.0,
+    "online_eta_P": 0.04,
+    "online_eta_I": 0.0008,
+    "online_eta_D": 0.008,
+    "save_path": "best_model_rtx5070.pt",
+    "results_path": "results_rtx5070.json"
+  },
+  "model_params": 15157632,
+  "challenge_metrics": {
+    "top1_acc": 0.13475,
+    "topk_accuracy": {
+      "1": 0.13475,
+      "3": 0.48275,
+      "5": 0.62475,
+      "13": 0.734
+    },
+    "avg_beam_index_distance": 89.36675,
+    "apl_db": -17.869800567626953,
+    "power_ratio": 0.24680419266223907
+  },
+  "conformal_pid": {
+    "miss_rate": 0.091,
+    "avg_candidate_size": 50.8945
+  }
+}

@@ -1,0 +1,50 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Large Datasets & Archives (Exceeding GitHub 100MB Limit)
+*.zip
+*.zip.*
+*.tar.gz
+*.mat
+*.p
+scenario36_rgb180*
+scenario36_pwr*
+scenario36_gps*
+scenario36.p
+scenario36.mat
+
+# PyTorch Model Checkpoints & Large Binaries
+*.pt
+*.pth
+*.bin
+*.onnx
+*.ckpt
+checkpoint_epoch_*.pt
+best_model*.pt
+
+# Jupyter Notebook Checkpoints & OS Artifacts
+.ipynb_checkpoints/
+*.log
+.DS_Store
+Thumbs.db
