@@ -1,0 +1,51 @@
+# =====================================================================
+# Optimized Configuration for NVIDIA GeForce RTX 5070 (12GB)
+# System: AMD Ryzen 7 7700 (8-Core/16-Thread), 32GB DDR5-6000 RAM
+# =====================================================================
+
+# Model Architecture (~15.1M parameters)
+model:
+  name: "P3"
+  hidden_dim: 192
+  gru_layers: 2
+  fusion_heads: 4
+  fusion_layers: 2
+  freeze_backbone_until: "layer3"
+  dropout: 0.15
+  n_beams: 256
+
+# Training Configuration
+training:
+  batch_size: 64
+  epochs: 80
+  learning_rate: 0.0003  # 3e-4
+  weight_decay: 0.0001   # 1e-4
+  optimizer: "AdamW"
+  scheduler: "OneCycleLR"
+  warmup_pct: 0.05
+  early_stopping:
+    patience: 12
+    min_epochs: 30
+  mixed_precision: "bfloat16"
+
+# Conformal Risk Control & Online Tracking
+conformal:
+  target_alpha: 0.10
+  delta_db: 3.0
+  controller: "ACI"
+  eta_grid: [0.001, 0.005, 0.01, 0.05, 0.1]
+
+# Data Loading Configuration
+data:
+  num_workers: 0          # Direct synchronous loading (safe & fast on Windows)
+  pin_memory: true        # Direct host-to-GPU DMA transfer
+  persistent_workers: false
+  image_size: [96, 96]
+  seq_len_gps: 5
+  seq_len_img: 5
+
+# Hardware Settings
+hardware:
+  device: "cuda"
+  seed: 42
+  cudnn_benchmark: true
