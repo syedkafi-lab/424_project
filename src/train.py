@@ -65,7 +65,31 @@ def check_pause_flag(output_dir):
         return True
     return False
 
+def resolve_device(device_arg):
+    """
+    Robust device resolver supporting 'cuda', 'cpu', 'auto', 'mps' with automatic fallback.
+    """
+    if device_arg is None or str(device_arg).lower() in ["auto", "none"]:
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        return torch.device("cpu")
+    
+    device_str = str(device_arg).lower().strip()
+    if "cuda" in device_str:
+        if torch.cuda.is_available():
+            return torch.device(device_str)
+        print(f"{get_current_timestamp()} [WARN] CUDA requested ('{device_arg}') but not available. Falling back to CPU.", flush=True)
+        return torch.device("cpu")
+    elif "mps" in device_str:
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return torch.device("mps")
+        print(f"{get_current_timestamp()} [WARN] Apple MPS requested but not available. Falling back to CPU.", flush=True)
+        return torch.device("cpu")
+    else:
+        return torch.device("cpu")
+
 def evaluate_model(model, loader, device="cuda", use_bf16=True):
+    dev = resolve_device(device) if not isinstance(device, torch.device) else device
     model.eval()
     all_logits = []
     all_pred_profiles = []
@@ -73,17 +97,18 @@ def evaluate_model(model, loader, device="cuda", use_bf16=True):
     all_true_profiles = []
     all_seq_indices = []
 
-    autocast_dtype = torch.bfloat16 if (use_bf16 and device.type == "cuda") else torch.float32
+    is_cuda = (dev.type == "cuda" and torch.cuda.is_available())
+    autocast_dtype = torch.bfloat16 if (use_bf16 and is_cuda) else torch.float32
 
     with torch.no_grad():
         for batch in loader:
-            rgb = batch["rgb"].to(device, non_blocking=True)
-            gps = batch["gps"].to(device, non_blocking=True)
+            rgb = batch["rgb"].to(dev, non_blocking=is_cuda)
+            gps = batch["gps"].to(dev, non_blocking=is_cuda)
             beam_labels = batch["beam_label"].cpu().numpy()
             true_profiles = batch["profile_db"].cpu().numpy()
             seq_indices = batch["seq_index"].cpu().numpy()
 
-            if device.type == "cuda" and use_bf16:
+            if is_cuda and use_bf16:
                 with torch.autocast(device_type="cuda", dtype=autocast_dtype):
                     out = model(rgb, gps)
             else:
@@ -148,8 +173,9 @@ def save_full_checkpoint(checkpoint_path, model, optimizer, scheduler, epoch, be
 
 def load_full_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None, device="cuda"):
     """Load serialized checkpoint and restore complete training state."""
+    dev = resolve_device(device) if not isinstance(device, torch.device) else device
     print(f"{get_current_timestamp()} Loading checkpoint from {checkpoint_path}...", flush=True)
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    checkpoint = torch.load(checkpoint_path, map_location=dev, weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])
     if optimizer is not None and "optimizer_state_dict" in checkpoint and checkpoint["optimizer_state_dict"] is not None:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -179,20 +205,23 @@ def load_full_checkpoint(checkpoint_path, model, optimizer=None, scheduler=None,
 def train_single_run(args, datasets, seed=42):
     global PAUSE_REQUESTED
     set_seed(seed)
-    device = torch.device(args.device if torch.cuda.is_available() and "cuda" in args.device else "cpu")
-    use_bf16 = (args.mixed_precision == "bfloat16" and device.type == "cuda")
+    device = resolve_device(args.device)
+    is_cuda = (device.type == "cuda" and torch.cuda.is_available())
+    use_bf16 = (args.mixed_precision in ["bfloat16", "bf16"] and is_cuda)
 
     print(f"\n================================================================================", flush=True)
     print(f"{get_current_timestamp()} STARTING RUN | Model: {args.model} | Seed: {seed} | Device: {device} (BF16: {use_bf16})", flush=True)
-    if device.type == "cuda":
+    if is_cuda:
         print(f"{get_current_timestamp()} GPU Hardware: {torch.cuda.get_device_name(0)} | VRAM: {torch.cuda.get_device_properties(0).total_memory / (1024**3):.1f} GB", flush=True)
+    else:
+        print(f"{get_current_timestamp()} CPU Hardware: {torch.get_num_threads()} Worker Threads | Precision: Float32 (Minimum Requirements Mode)", flush=True)
     print(f"================================================================================", flush=True)
 
     loaders = get_dataloaders(
         datasets,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        pin_memory=(device.type == "cuda")
+        pin_memory=is_cuda
     )
 
     model = create_model(args.model).to(device)
@@ -238,21 +267,23 @@ def train_single_run(args, datasets, seed=42):
         print(f"{get_current_timestamp()} [RESUMED] Resuming training from Epoch {start_epoch}/{args.epochs} (Previous Elapsed Time: {format_time_duration(total_elapsed_time)}, Best Val Top1: {best_val_top1*100:.2f}%)", flush=True)
 
     if args.dry_run:
-        print(f"{get_current_timestamp()} [Dry Run] Running 1 batch through all loaders...", flush=True)
+        print(f"{get_current_timestamp()} [Dry Run] Running 1 batch through all loaders on {device}...", flush=True)
         for name, loader in loaders.items():
             b = next(iter(loader))
-            rgb = b["rgb"].to(device)
-            gps = b["gps"].to(device)
-            if use_bf16:
+            rgb = b["rgb"].to(device, non_blocking=is_cuda)
+            gps = b["gps"].to(device, non_blocking=is_cuda)
+            labels_d = b["beam_label"].to(device, non_blocking=is_cuda)
+            profiles_d = b["profile_db"].to(device, non_blocking=is_cuda)
+            if is_cuda and use_bf16:
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     out = model(rgb, gps)
-                    loss, _ = loss_fn(out, b["beam_label"].to(device), b["profile_db"].to(device))
+                    loss, _ = loss_fn(out, labels_d, profiles_d)
             else:
                 out = model(rgb, gps)
-                loss, _ = loss_fn(out, b["beam_label"].to(device), b["profile_db"].to(device))
+                loss, _ = loss_fn(out, labels_d, profiles_d)
             print(f"  [Dry Run {name.upper()}] Batch OK, Loss={loss.item():.4f}", flush=True)
         print(f"{get_current_timestamp()} [Dry Run COMPLETE] {args.model} verified on {device}!", flush=True)
-        return {"dry_run": True, "model": args.model}
+        return {"dry_run": True, "model": args.model, "device": str(device)}
 
     print(f"\n{get_current_timestamp()} Training loop starting: Epochs {start_epoch} to {args.epochs} | Batches per Epoch: {len(loaders['train'])}", flush=True)
     print(f"{get_current_timestamp()} [INFO] To pause training anytime, type 'pause' or create 'pause.flag' or press Ctrl+C.\n", flush=True)
@@ -272,14 +303,14 @@ def train_single_run(args, datasets, seed=42):
 
         pbar = tqdm(loaders["train"], desc=f"Epoch {epoch:02d}/{args.epochs:02d} [Train]", leave=True, file=sys.stdout)
         for batch_idx, batch in enumerate(pbar):
-            rgb = batch["rgb"].to(device, non_blocking=True)
-            gps = batch["gps"].to(device, non_blocking=True)
-            labels = batch["beam_label"].to(device, non_blocking=True)
-            profiles = batch["profile_db"].to(device, non_blocking=True)
+            rgb = batch["rgb"].to(device, non_blocking=is_cuda)
+            gps = batch["gps"].to(device, non_blocking=is_cuda)
+            labels = batch["beam_label"].to(device, non_blocking=is_cuda)
+            profiles = batch["profile_db"].to(device, non_blocking=is_cuda)
 
             optimizer.zero_grad()
 
-            if use_bf16:
+            if is_cuda and use_bf16:
                 with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                     outputs = model(rgb, gps)
                     loss, loss_details = loss_fn(outputs, labels, profiles)

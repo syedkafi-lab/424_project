@@ -195,6 +195,7 @@ def prepare_multimodal_data(data_root=".", img_size=(96, 96)):
 
 def get_dataloaders(datasets, batch_size=64, num_workers=0, pin_memory=True):
     loaders = {}
+    safe_pin_memory = bool(pin_memory and torch.cuda.is_available())
     for split, ds in datasets.items():
         is_train = (split == "train")
         loaders[split] = DataLoader(
@@ -202,7 +203,7 @@ def get_dataloaders(datasets, batch_size=64, num_workers=0, pin_memory=True):
             batch_size=batch_size,
             shuffle=is_train,
             num_workers=num_workers,
-            pin_memory=pin_memory,
+            pin_memory=safe_pin_memory,
             drop_last=False
         )
     return loaders

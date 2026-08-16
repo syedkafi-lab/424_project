@@ -1,0 +1,51 @@
+# =====================================================================
+# Optimized Lightweight Configuration for CPU / Low-Spec Devices
+# Model: P3_MultiTaskProfile (Same 15.1M Architecture, Zero Model Changes)
+# Precision: Float32 (CPU Native)
+# =====================================================================
+
+# Model Architecture (~15.1M parameters - Unchanged)
+model:
+  name: "P3"
+  hidden_dim: 192
+  gru_layers: 2
+  fusion_heads: 4
+  fusion_layers: 2
+  freeze_backbone_until: "layer3"
+  dropout: 0.15
+  n_beams: 256
+
+# Lightweight Training Configuration for CPU
+training:
+  batch_size: 32
+  epochs: 15
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  optimizer: "AdamW"
+  scheduler: "OneCycleLR"
+  warmup_pct: 0.05
+  early_stopping:
+    patience: 5
+    min_epochs: 5
+  mixed_precision: "no"
+
+# Conformal Risk Control
+conformal:
+  target_alpha: 0.10
+  delta_db: 3.0
+  controller: "ACI"
+  eta_grid: [0.001, 0.01, 0.05, 0.1]
+
+# Safe CPU Data Loading
+data:
+  num_workers: 0
+  pin_memory: false
+  image_size: [96, 96]
+  seq_len_gps: 5
+  seq_len_img: 5
+
+# CPU Hardware Execution
+hardware:
+  device: "cpu"
+  seed: 42
+  cudnn_benchmark: false

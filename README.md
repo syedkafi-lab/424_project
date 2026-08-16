@@ -50,7 +50,8 @@ Evaluated on **Scenario 36** across 124 chronological trajectory runs (24,179 se
 
 ```text
 424_project/
-├── config_rtx5070.yaml                     # Hardware & model hyperparameter config
+├── config_rtx5070.yaml                     # Hardware & model hyperparameter config (GPU Mode)
+├── config_cpu.yaml                         # Lightweight config for CPU / weaker devices (CPU Mode)
 ├── train.py                                # Main training, evaluation & pause/resume pipeline
 ├── requirements.txt                        # Pinned Python package dependencies
 ├── LICENSE                                 # MIT License
@@ -116,22 +117,36 @@ Evaluated on **Scenario 36** across 124 chronological trajectory runs (24,179 se
 
 ### 1. Installation
 ```bash
-git clone https://github.com/your-username/deepsense-v2v-beam-tracking.git
-cd deepsense-v2v-beam-tracking
+git clone https://github.com/syedkafi-lab/424_project.git
+cd 424_project
 pip install -r requirements.txt
 ```
 
-### 2. Run Model Training on GPU
+### 2. Run Model Training
+
+#### Option A: GPU Accelerated Training (NVIDIA CUDA / RTX 5070)
 Train out-of-the-box on the full Scenario 36 dataset with native CUDA mixed precision:
 ```bash
 python train.py --config config_rtx5070.yaml
 ```
 
+#### Option B: CPU / Minimum Requirements Training (Low-Spec Hardware)
+Train on CPU with automatic device fallback and optimized memory management:
+```bash
+python train.py --config config_cpu.yaml
+```
+*Or specify device directly:*
+```bash
+python train.py --device cpu --epochs 15 --batch_size 32
+```
+
 ### 3. Pause & Resume Anytime
-- **To Pause**: Type `"pause"` or create a `pause.flag` file in the root directory. The engine will gracefully serialize the entire model, optimizer momentum, learning rate schedule, random seeds, and training timer.
+- **To Pause**: Type `"pause"` into the terminal or create a `pause.flag` file in the root directory. The engine will gracefully serialize the entire model, optimizer momentum, learning rate schedule, random seeds, and training timer.
 - **To Resume**: Run:
 ```bash
 python train.py --config config_rtx5070.yaml --resume
+# Or for CPU:
+python train.py --config config_cpu.yaml --resume
 ```
 
 ### 4. Interactive Exploratory Data Analysis
